@@ -3,14 +3,19 @@ const cloudinary = require('../config/cloudinary');
 
 const getPosts = async (req, res) => {
     try {
-        const [posts] = await db.query(`
+        const { user_id } = req.query;
+
+        const query = `
             SELECT p.*, u.name, u.username, u.profile_picture,
             l.city, l.country
             FROM posts p
             JOIN users u ON p.user_id = u.id
             LEFT JOIN locations l ON p.id = l.post_id
+            ${user_id ? 'WHERE p.user_id = ?' : ''}
             ORDER BY p.created_at DESC
-        `);
+        `;
+
+        const [posts] = await db.query(query, user_id ? [user_id] : []);
 
         for (const post of posts) {
             const [media] = await db.query('SELECT url, type FROM post_media WHERE post_id = ?', [post.id]);
