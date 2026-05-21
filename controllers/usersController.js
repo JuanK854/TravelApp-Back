@@ -1,4 +1,5 @@
 const db = require('../config/db');
+const cloudinary = require('../config/cloudinary');
 
 const getUsers = async (req, res) => {
     try {
@@ -26,13 +27,28 @@ const getUserById = async (req, res) => {
 
 const updateUser = async (req, res) => {
     try {
-        const { name, username, profile_picture, bio } = req.body;
+        const { name, username, bio } = req.body;
+        const profile_picture = req.file ? req.file.path : null;
+
+        const [current] = await db.query('SELECT profile_picture FROM users WHERE id = ?', [req.params.id]);
+        if (current.length === 0) return res.status(404).json({ error: `No existe un usuario con id ${req.params.id}` });
+
+        if (profile_picture && current[0].profile_picture) {
+            const publicId = current[0].profile_picture.split('/').slice(-2).join('/').split('.')[0];
+            await cloudinary.uploader.destroy(publicId);
+        }
+
         const [result] = await db.query(
             'UPDATE users SET name = ?, username = ?, profile_picture = ?, bio = ? WHERE id = ?',
-            [name, username, profile_picture || null, bio || null, req.params.id]
+            [name, username, profile_picture || current[0].profile_picture, bio || null, req.params.id]
         );
+
         if (result.affectedRows === 0) return res.status(404).json({ error: `No existe un usuario con id ${req.params.id}` });
-        res.json({ message: 'Usuario actualizado' });
+
+        res.json({
+            message: 'Usuario actualizado',
+            profile_picture: profile_picture || current[0].profile_picture
+        });
     } catch (error) {
         console.error(error);
         res.status(500).json({ error: 'Error al actualizar usuario' });
