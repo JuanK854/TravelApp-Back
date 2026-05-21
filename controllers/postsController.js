@@ -6,7 +6,8 @@ const getPosts = async (req, res) => {
         const { user_id } = req.query;
 
         const query = `
-            SELECT p.*, u.name, u.username, u.profile_picture,
+            SELECT p.id, p.user_id, p.title, p.description, p.created_at,
+            u.name, u.username, u.profile_picture,
             l.city, l.country
             FROM posts p
             JOIN users u ON p.user_id = u.id
@@ -32,7 +33,8 @@ const getPosts = async (req, res) => {
 const getPostById = async (req, res) => {
     try {
         const [rows] = await db.query(`
-            SELECT p.*, u.name, u.username, u.profile_picture,
+            SELECT p.id, p.user_id, p.title, p.description, p.created_at,
+            u.name, u.username, u.profile_picture,
             l.city, l.country
             FROM posts p
             JOIN users u ON p.user_id = u.id
