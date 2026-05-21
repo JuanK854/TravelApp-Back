@@ -1,5 +1,5 @@
 const db = require('../config/db');
-const bcrypt = require('bcrypt');
+const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
 const register = async (req, res) => {
@@ -13,7 +13,7 @@ const register = async (req, res) => {
         }
 
         const [existingUser] = await db.query(
-            'SELECT * FROM USERS WHERE EMAIL = ? OR USERNAME = ?',
+            'SELECT * FROM users WHERE email = ? OR username = ?',
             [email, username]
         );
 
@@ -26,7 +26,7 @@ const register = async (req, res) => {
         const hashedPassword = await bcrypt.hash(password, 10);
 
         const [result] = await db.query(
-            'INSERT INTO USERS (EMAIL, NAME, USERNAME, PASWORD, PROFILE_PICTURE, BIO) VALUES (?, ?, ?, ?, ?, ?)',
+            'INSERT INTO users (email, name, username, password, profile_picture, bio) VALUES (?, ?, ?, ?, ?, ?)',
             [email, name, username, hashedPassword, profile_picture || null, bio || null]
         );
 
@@ -58,7 +58,7 @@ const login = async (req, res) => {
             });
         }
 
-        const [rows] = await db.query('SELECT * FROM USERS WHERE EMAIL = ?', [email]);
+        const [rows] = await db.query('SELECT * FROM users WHERE email = ?', [email]);
 
         if (rows.length === 0) {
             return res.status(401).json({
@@ -68,7 +68,7 @@ const login = async (req, res) => {
 
         const user = rows[0];
 
-        const passwordOk = await bcrypt.compare(password, user.PASWORD);
+        const passwordOk = await bcrypt.compare(password, user.password);
 
         if (!passwordOk) {
             return res.status(401).json({
@@ -78,24 +78,24 @@ const login = async (req, res) => {
 
         const token = jwt.sign(
             {
-                id: user.ID,
-                email: user.EMAIL,
-                username: user.USERNAME
+                id: user.id,
+                email: user.email,
+                username: user.username
             },
             process.env.JWT_SECRET,
-            { expiresIn: '1h' }
+            { expiresIn: '7d' }
         );
 
         res.json({
             message: 'Login exitoso',
             token,
             user: {
-                id: user.ID,
-                name: user.NAME,
-                username: user.USERNAME,
-                email: user.EMAIL,
-                profile_picture: user.PROFILE_PICTURE,
-                bio: user.BIO
+                id: user.id,
+                name: user.name,
+                username: user.username,
+                email: user.email,
+                profile_picture: user.profile_picture,
+                bio: user.bio
             }
         });
 

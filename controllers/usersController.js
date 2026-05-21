@@ -1,43 +1,53 @@
-let users = [{id: 1,email: 'cine.solo@gmail.com',name: 'Pedro Gutierrez',username: 'CineSolo',password: 'hashed_pass_1',profile_picture: 'http://x.com.jpg',bio: 'Un mochilero recien mudado de casa que hace cine en solitario'}];
+const db = require('../config/db');
 
-const getUsers = (req, res) => res.json(users);
-
-const getUserById = (req, res) => {
-    const user = users.find(u => u.id === parseInt(req.params.id));
-    if (!user) return res.status(404).json({ error: `No existe un usuario con id ${req.params.id}` });
-    res.json(user);
+const getUsers = async (req, res) => {
+    try {
+        const [users] = await db.query('SELECT id, email, name, username, profile_picture, bio, created_at FROM users');
+        res.json(users);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Error al obtener usuarios' });
+    }
 };
 
-const createUser = (req, res) => {
-    const { email, name, username, password, profile_picture, bio } = req.body;
-    if (!email || !name || !username || !password)
-        return res.status(400).json({ error: 'email, name, username y password son obligatorios' });
-
-    const nuevo = {
-        id: users.length > 0 ? users[users.length - 1].id + 1 : 1,
-        email, name, username, password,
-        profile_picture: profile_picture || null,
-        bio: bio || null
-    };
-    users.push(nuevo);
-    res.status(201).json(nuevo);
+const getUserById = async (req, res) => {
+    try {
+        const [rows] = await db.query(
+            'SELECT id, email, name, username, profile_picture, bio, created_at FROM users WHERE id = ?',
+            [req.params.id]
+        );
+        if (rows.length === 0) return res.status(404).json({ error: `No existe un usuario con id ${req.params.id}` });
+        res.json(rows[0]);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Error al obtener usuario' });
+    }
 };
 
-const updateUser = (req, res) => {
-    const index = users.findIndex(u => u.id === parseInt(req.params.id));
-    if (index === -1) return res.status(404).json({ error: `No existe un usuario con id ${req.params.id}` });
-
-    const { email, name, username, password, profile_picture, bio } = req.body;
-    users[index] = { ...users[index], ...(email && { email }), ...(name && { name }), ...(username && { username }), ...(password && { password }), ...(profile_picture && { profile_picture }), ...(bio && { bio }) };
-    res.json({ message: 'Usuario actualizado', user: users[index] });
+const updateUser = async (req, res) => {
+    try {
+        const { name, username, profile_picture, bio } = req.body;
+        const [result] = await db.query(
+            'UPDATE users SET name = ?, username = ?, profile_picture = ?, bio = ? WHERE id = ?',
+            [name, username, profile_picture || null, bio || null, req.params.id]
+        );
+        if (result.affectedRows === 0) return res.status(404).json({ error: `No existe un usuario con id ${req.params.id}` });
+        res.json({ message: 'Usuario actualizado' });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Error al actualizar usuario' });
+    }
 };
 
-const deleteUser = (req, res) => {
-    const index = users.findIndex(u => u.id === parseInt(req.params.id));
-    if (index === -1) return res.status(404).json({ error: `No existe un usuario con id ${req.params.id}` });
-
-    const eliminado = users.splice(index, 1);
-    res.json({ message: 'Usuario eliminado', user: eliminado[0] });
+const deleteUser = async (req, res) => {
+    try {
+        const [result] = await db.query('DELETE FROM users WHERE id = ?', [req.params.id]);
+        if (result.affectedRows === 0) return res.status(404).json({ error: `No existe un usuario con id ${req.params.id}` });
+        res.json({ message: 'Usuario eliminado' });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Error al eliminar usuario' });
+    }
 };
 
-module.exports = { getUsers, getUserById, createUser, updateUser, deleteUser };
+module.exports = { getUsers, getUserById, updateUser, deleteUser };

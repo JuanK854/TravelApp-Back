@@ -1,37 +1,122 @@
-let posts = [{id: 1, user_id: 1, title: 'Rodando en CDMX sin plan', description: 'Llege sin saber a donde ir y termine grabando en tepito de pura casualidad. no se si fue mala idea pero salio algo', images: ['http://x.com.jpg'], creation: '2025-04-16 00:00:00'}];
+const db = require('../config/db');
+const cloudinary = require('../config/cloudinary');
 
-const getPosts = (req, res) => res.json(posts);
+const getPosts = async (req, res) => {
+    try {
+        const [posts] = await db.query(`
+            SELECT p.*, u.name, u.username, u.profile_picture,
+            l.city, l.country
+            FROM posts p
+            JOIN users u ON p.user_id = u.id
+            LEFT JOIN locations l ON p.id = l.post_id
+            ORDER BY p.created_at DESC
+        `);
 
-const getPostById = (req, res) => {
-    const post = posts.find(p => p.id === parseInt(req.params.id));
-    if (!post) return res.status(404).json({ error: `No existe un post con id ${req.params.id}` });
-    res.json(post);
+        for (const post of posts) {
+            const [media] = await db.query('SELECT url, type FROM post_media WHERE post_id = ?', [post.id]);
+            post.media = media;
+        }
+
+        res.json(posts);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Error al obtener posts' });
+    }
 };
 
-const createPost = (req, res) => {
-    const { user_id, title, description } = req.body;
-    if (!user_id || !title || !description)
-        return res.status(400).json({ error: 'user_id, title y description son obligatorios' });
+const getPostById = async (req, res) => {
+    try {
+        const [rows] = await db.query(`
+            SELECT p.*, u.name, u.username, u.profile_picture,
+            l.city, l.country
+            FROM posts p
+            JOIN users u ON p.user_id = u.id
+            LEFT JOIN locations l ON p.id = l.post_id
+            WHERE p.id = ?
+        `, [req.params.id]);
 
-    const nuevo = { id: posts.length > 0 ? posts[posts.length - 1].id + 1 : 1, ...req.body, creation: new Date().toISOString() };
-    posts.push(nuevo);
-    res.status(201).json(nuevo);
+        if (rows.length === 0) return res.status(404).json({ error: `No existe un post con id ${req.params.id}` });
+
+        const [media] = await db.query('SELECT url, type FROM post_media WHERE post_id = ?', [req.params.id]);
+        res.json({ ...rows[0], media });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Error al obtener post' });
+    }
 };
 
-const updatePost = (req, res) => {
-    const index = posts.findIndex(p => p.id === parseInt(req.params.id));
-    if (index === -1) return res.status(404).json({ error: `No existe un post con id ${req.params.id}` });
+const createPost = async (req, res) => {
+    try {
+        const { title, description, city, country } = req.body;
+        const user_id = req.user.id;
 
-    posts[index] = { ...posts[index], ...req.body };
-    res.json({ message: 'Post actualizado', post: posts[index] });
+        if (!title || !description)
+            return res.status(400).json({ error: 'title y description son obligatorios' });
+
+        const [result] = await db.query(
+            'INSERT INTO posts (user_id, title, description) VALUES (?, ?, ?)',
+            [user_id, title, description]
+        );
+
+        const post_id = result.insertId;
+
+        if (city || country) {
+            await db.query(
+                'INSERT INTO locations (post_id, city, country) VALUES (?, ?, ?)',
+                [post_id, city || null, country || null]
+            );
+        }
+
+        if (req.files && req.files.length > 0) {
+            for (const file of req.files) {
+                await db.query(
+                    'INSERT INTO post_media (post_id, url, type) VALUES (?, ?, ?)',
+                    [post_id, file.path, 'image']
+                );
+            }
+        }
+
+        res.status(201).json({ message: 'Post creado', id: post_id });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Error al crear post' });
+    }
 };
 
-const deletePost = (req, res) => {
-    const index = posts.findIndex(p => p.id === parseInt(req.params.id));
-    if (index === -1) return res.status(404).json({ error: `No existe un post con id ${req.params.id}` });
+const updatePost = async (req, res) => {
+    try {
+        const { title, description } = req.body;
+        const [result] = await db.query(
+            'UPDATE posts SET title = ?, description = ? WHERE id = ? AND user_id = ?',
+            [title, description, req.params.id, req.user.id]
+        );
+        if (result.affectedRows === 0) return res.status(404).json({ error: 'Post no encontrado o no autorizado' });
+        res.json({ message: 'Post actualizado' });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Error al actualizar post' });
+    }
+};
 
-    const eliminado = posts.splice(index, 1);
-    res.json({ message: 'Post eliminado', post: eliminado[0] });
+const deletePost = async (req, res) => {
+    try {
+        const [media] = await db.query('SELECT url, type FROM post_media WHERE post_id = ?', [req.params.id]);
+
+        for (const file of media) {
+            const publicId = file.url.split('/').slice(-2).join('/').split('.')[0];
+            await cloudinary.uploader.destroy(publicId, { resource_type: 'image' });
+        }
+
+        const [result] = await db.query(
+            'DELETE FROM posts WHERE id = ? AND user_id = ?',
+            [req.params.id, req.user.id]
+        );
+        if (result.affectedRows === 0) return res.status(404).json({ error: 'Post no encontrado o no autorizado' });
+        res.json({ message: 'Post eliminado' });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Error al eliminar post' });
+    }
 };
 
 module.exports = { getPosts, getPostById, createPost, updatePost, deletePost };

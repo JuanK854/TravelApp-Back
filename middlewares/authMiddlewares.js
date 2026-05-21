@@ -3,7 +3,7 @@ const jwt = require('jsonwebtoken');
 const authMiddleware = (req, res, next) => {
     const authHeader = req.headers.authorization;
 
-    if(!authHeader){
+    if (!authHeader) {
         return res.status(401).json({
             error: 'Token no enviado'
         });
@@ -11,7 +11,7 @@ const authMiddleware = (req, res, next) => {
 
     const token = authHeader.split(' ')[1];
 
-    if(!token){
+    if (!token) {
         return res.status(401).json({
             error: 'Formato de token inválido'
         });

@@ -1,36 +1,66 @@
-let locations = [{id: 1, post_id: 1, city: 'Ciudad de Mexico', country: 'Mexico'}];
+const db = require('../config/db');
 
-const getLocations = (req, res) => res.json(locations);
-
-const getLocationById = (req, res) => {
-    const loc = locations.find(l => l.id === parseInt(req.params.id));
-    if (!loc) return res.status(404).json({ error: `No existe una location con id ${req.params.id}` });
-    res.json(loc);
+const getLocations = async (req, res) => {
+    try {
+        const [locations] = await db.query('SELECT * FROM locations');
+        res.json(locations);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Error al obtener locations' });
+    }
 };
 
-const createLocation = (req, res) => {
-    const { post_id } = req.body;
-    if (!post_id) return res.status(400).json({ error: 'post_id es obligatorio' });
-
-    const nuevo = { id: locations.length > 0 ? locations[locations.length - 1].id + 1 : 1, ...req.body };
-    locations.push(nuevo);
-    res.status(201).json(nuevo);
+const getLocationById = async (req, res) => {
+    try {
+        const [rows] = await db.query('SELECT * FROM locations WHERE id = ?', [req.params.id]);
+        if (rows.length === 0) return res.status(404).json({ error: `No existe una location con id ${req.params.id}` });
+        res.json(rows[0]);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Error al obtener location' });
+    }
 };
 
-const updateLocation = (req, res) => {
-    const index = locations.findIndex(l => l.id === parseInt(req.params.id));
-    if (index === -1) return res.status(404).json({ error: `No existe una location con id ${req.params.id}` });
+const createLocation = async (req, res) => {
+    try {
+        const { post_id, city, country } = req.body;
+        if (!post_id) return res.status(400).json({ error: 'post_id es obligatorio' });
 
-    locations[index] = { ...locations[index], ...req.body };
-    res.json({ message: 'Location actualizada', location: locations[index] });
+        const [result] = await db.query(
+            'INSERT INTO locations (post_id, city, country) VALUES (?, ?, ?)',
+            [post_id, city || null, country || null]
+        );
+        res.status(201).json({ message: 'Location creada', id: result.insertId });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Error al crear location' });
+    }
 };
 
-const deleteLocation = (req, res) => {
-    const index = locations.findIndex(l => l.id === parseInt(req.params.id));
-    if (index === -1) return res.status(404).json({ error: `No existe una location con id ${req.params.id}` });
+const updateLocation = async (req, res) => {
+    try {
+        const { city, country } = req.body;
+        const [result] = await db.query(
+            'UPDATE locations SET city = ?, country = ? WHERE id = ?',
+            [city || null, country || null, req.params.id]
+        );
+        if (result.affectedRows === 0) return res.status(404).json({ error: `No existe una location con id ${req.params.id}` });
+        res.json({ message: 'Location actualizada' });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Error al actualizar location' });
+    }
+};
 
-    const eliminado = locations.splice(index, 1);
-    res.json({ message: 'Location eliminada', location: eliminado[0] });
+const deleteLocation = async (req, res) => {
+    try {
+        const [result] = await db.query('DELETE FROM locations WHERE id = ?', [req.params.id]);
+        if (result.affectedRows === 0) return res.status(404).json({ error: `No existe una location con id ${req.params.id}` });
+        res.json({ message: 'Location eliminada' });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Error al eliminar location' });
+    }
 };
 
 module.exports = { getLocations, getLocationById, createLocation, updateLocation, deleteLocation };
